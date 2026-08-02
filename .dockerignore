@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+.git/
+.gitignore
+.env
+data/
+tests/
+*.md
+docker-compose*.yml
+Dockerfile

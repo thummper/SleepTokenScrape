@@ -1,0 +1,32 @@
+services:
+  sleep-token-watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sleep-token-watcher:latest
+    container_name: sleep-token-watcher
+    restart: unless-stopped
+    # No env_file: Compose already reads .env for ${VAR} substitution locally, and Portainer
+    # supplies the same variables from the stack's environment settings.
+    environment:
+      # Nested config keys use double underscores; these override appsettings.json.
+      Watcher__PollInterval: "${POLL_INTERVAL:-00:15:00}"
+      Watcher__SendStartupTestEmail: "${SEND_STARTUP_TEST_EMAIL:-false}"
+      Email__SmtpHost: "${SMTP_HOST:-smtp.gmail.com}"
+      Email__SmtpPort: "${SMTP_PORT:-587}"
+      # :? fails the deploy immediately with this message rather than starting a broken container.
+      Email__Username: "${GMAIL_ADDRESS:?set GMAIL_ADDRESS}"
+      Email__Password: "${GMAIL_APP_PASSWORD:?set GMAIL_APP_PASSWORD}"
+      Email__FromAddress: "${GMAIL_ADDRESS:?set GMAIL_ADDRESS}"
+      Email__ToAddresses__0: "${NOTIFY_ADDRESS:?set NOTIFY_ADDRESS}"
+      TZ: "${TZ:-Europe/London}"
+    volumes:
+      - watcher-state:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  watcher-state:

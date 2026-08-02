@@ -1,0 +1,20 @@
+## Secrets - never commit
+.env
+
+## Local state
+data/
+*.state.json
+
+## .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+
+## IDE
+.vs/
+.vscode/
+.idea/

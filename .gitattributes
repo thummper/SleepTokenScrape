@@ -1,0 +1,6 @@
+# Normalise to LF in the repository so files stay valid when checked out on the Linux
+# build host (the Dockerfile HEALTHCHECK is shell; CRLF would break it).
+* text=auto eol=lf
+
+# Windows-only tooling keeps CRLF.
+*.sln text eol=crlf
