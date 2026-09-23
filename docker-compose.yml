@@ -4,6 +4,9 @@ services:
       context: .
       dockerfile: Dockerfile
     image: sleep-token-watcher:latest
+    # The image only exists locally. "build" stops Compose (and Portainer's re-pull) from asking
+    # Docker Hub for it, and rebuilds from the pulled source on every deploy.
+    pull_policy: build
     container_name: sleep-token-watcher
     restart: unless-stopped
     # No env_file: Compose already reads .env for ${VAR} substitution locally, and Portainer
