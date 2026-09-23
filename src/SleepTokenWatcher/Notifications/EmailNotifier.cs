@@ -1,3 +1,4 @@
+using System.Net;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Logging;
@@ -14,13 +15,16 @@ namespace SleepTokenWatcher.Notifications;
 /// </summary>
 public sealed class EmailNotifier(
     IOptions<EmailOptions> emailOptions,
-    ChangeEmailBuilder builder,
+    IOptions<WatcherOptions> watcherOptions,
     ILogger<EmailNotifier> logger)
 {
     private readonly EmailOptions _options = emailOptions.Value;
+    private readonly string _displayTimeZone = watcherOptions.Value.DisplayTimeZone;
 
-    public async Task SendChangesAsync(StoreChanges changes, CancellationToken cancellationToken)
+    public async Task SendChangesAsync(StoreOptions store, StoreChanges changes, CancellationToken cancellationToken)
     {
+        var builder = new ChangeEmailBuilder(store, _displayTimeZone);
+
         await SendAsync(
             builder.BuildSubject(changes),
             builder.BuildHtmlBody(changes),
@@ -28,10 +32,10 @@ public sealed class EmailNotifier(
             cancellationToken);
     }
 
-    public async Task SendStartupTestAsync(int productCount, CancellationToken cancellationToken)
+    public async Task SendStartupTestAsync(StoreOptions store, int productCount, CancellationToken cancellationToken)
     {
         var text = $"""
-                    Sleep Token store watcher started successfully.
+                    {store.Name} watcher started successfully.
 
                     It is tracking {productCount} products and will email you when products are added,
                     come back in stock, or change price.
@@ -39,13 +43,13 @@ public sealed class EmailNotifier(
 
         var html = $"""
                     <div style="font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;">
-                      <p><strong>Sleep Token store watcher started successfully.</strong></p>
+                      <p><strong>{WebUtility.HtmlEncode(store.Name)} watcher started successfully.</strong></p>
                       <p>Tracking {productCount} products. You will get an email when products are added,
                          come back in stock, or change price.</p>
                     </div>
                     """;
 
-        await SendAsync("Sleep Token Store: watcher started", html, text, cancellationToken);
+        await SendAsync($"{store.Name}: watcher started", html, text, cancellationToken);
     }
 
     private async Task SendAsync(string subject, string htmlBody, string textBody, CancellationToken cancellationToken)

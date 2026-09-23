@@ -6,7 +6,7 @@ using SleepTokenWatcher.Configuration;
 namespace SleepTokenWatcher.State;
 
 /// <summary>
-/// Persists the last-seen catalogue to a JSON file on a mounted volume.
+/// Persists each store's last-seen catalogue to its own JSON file on a mounted volume.
 /// Writes go to a temp file first so a container kill mid-write cannot leave a truncated state file.
 /// </summary>
 public sealed class JsonFileStateStore(
@@ -18,9 +18,9 @@ public sealed class JsonFileStateStore(
     private readonly WatcherOptions _options = options.Value;
 
     /// <summary>Returns null when no usable prior state exists, which the worker treats as "seed a baseline".</summary>
-    public async Task<CatalogSnapshot?> LoadAsync(CancellationToken cancellationToken)
+    public async Task<CatalogSnapshot?> LoadAsync(StoreOptions store, CancellationToken cancellationToken)
     {
-        var path = _options.StateFilePath;
+        var path = GetStatePath(store);
 
         if (!File.Exists(path))
         {
@@ -33,7 +33,8 @@ public sealed class JsonFileStateStore(
             await using var stream = File.OpenRead(path);
             var snapshot = await JsonSerializer.DeserializeAsync<CatalogSnapshot>(stream, JsonOptions, cancellationToken);
 
-            if (snapshot is null || snapshot.Products.Count == 0)
+            // An empty catalogue is only a real state for shops configured to sit empty between drops.
+            if (snapshot is null || (snapshot.Products.Count == 0 && !store.AllowEmptyCatalog))
             {
                 logger.LogWarning("State file at {Path} held no products; re-establishing the baseline.", path);
                 return null;
@@ -49,9 +50,9 @@ public sealed class JsonFileStateStore(
         }
     }
 
-    public async Task SaveAsync(CatalogSnapshot snapshot, CancellationToken cancellationToken)
+    public async Task SaveAsync(StoreOptions store, CatalogSnapshot snapshot, CancellationToken cancellationToken)
     {
-        var path = _options.StateFilePath;
+        var path = GetStatePath(store);
         var directory = Path.GetDirectoryName(path);
 
         if (!string.IsNullOrEmpty(directory))
@@ -68,6 +69,9 @@ public sealed class JsonFileStateStore(
 
         File.Move(tempPath, path, overwrite: true);
     }
+
+    private string GetStatePath(StoreOptions store) =>
+        Path.Combine(_options.StateDirectory, store.ResolveStateFileName());
 
     /// <summary>Best-effort liveness marker for the Docker healthcheck; never fails a cycle.</summary>
     public async Task TouchHeartbeatAsync(CancellationToken cancellationToken)

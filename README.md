@@ -20,6 +20,38 @@ https://storeuk.sleep-token.com/collections/all-products/products.json?limit=250
 That is Shopify's own structured feed — product ids, variants, prices and stock flags — so there is no HTML
 parsing and nothing breaks when the theme changes. Pagination is followed automatically.
 
+## Which stores it watches
+
+The stores are listed under `Watcher:Stores` in
+[`src/SleepTokenWatcher/appsettings.json`](src/SleepTokenWatcher/appsettings.json). One container checks
+all of them, one after another, every poll interval. Each store has its own state file in `/data`, and each
+sends its own emails.
+
+| Key | Platform | Feed |
+|---|---|---|
+| `sleep-token` | Shopify | `https://storeuk.sleep-token.com/collections/all-products/products.json` |
+| `york-ghost-merchants` | Squarespace | `https://www.yorkghostmerchants.com/shop?format=json` |
+
+To add a store, add an entry to the list, push, and redeploy. Shop details are not secrets, so they live in
+the repository; only the email credentials come from the environment.
+
+| Field | Meaning |
+|---|---|
+| `Key` | Unique id with lowercase letters, digits and dashes. Names the state file (`{Key}.json`). |
+| `Name` | Shown in email subjects and headings. |
+| `Platform` | `Shopify` or `Squarespace`. |
+| `BaseUrl` | The shop's root URL. |
+| `CollectionHandle` | Shopify: the collection handle. Squarespace: the shop page's URL slug. |
+| `AllowEmptyCatalog` | `true` for shops that hide every product between drops. |
+| `StateFileName` | Optional override of `{Key}.json`. |
+
+York Ghost Merchants hides every product between drops, so its feed is usually empty.
+`AllowEmptyCatalog: true` makes the watcher record that empty shop as the baseline. When a drop goes live,
+every product in it is reported as new. Without the flag, the watcher skips empty checks and the first check
+of a drop becomes the baseline, so you would get no email for it.
+
+A new store establishes its own baseline on its first check without affecting the others.
+
 ## Setup
 
 ### 1. Create a Gmail App Password
@@ -46,12 +78,14 @@ docker compose up -d --build
 docker compose logs -f
 ```
 
-The first cycle records a baseline and does **not** email you about the 22 products already in the store — only
+The first cycle records a baseline and does **not** email you about the products already in each store — only
 about changes after that point. You should see:
 
 ```
-Baseline established with 22 products.
-Sent "Sleep Token Store: watcher started" to you@gmail.com.
+[sleep-token] Baseline established with 36 products.
+[york-ghost-merchants] Baseline established with 0 products.
+Sent "Sleep Token UK Store: watcher started" to you@gmail.com.
+Sent "York Ghost Merchants: watcher started" to you@gmail.com.
 ```
 
 Set `SEND_STARTUP_TEST_EMAIL=false` afterwards and `docker compose up -d` to apply.
@@ -76,7 +110,7 @@ Portainer builds the image on the server straight from this repository — no re
 5. **Deploy the stack.** The first build pulls the .NET SDK image, so it takes a few minutes;
    later rebuilds are cached and quick.
 
-Check the container logs for `Baseline established with 22 products` and confirm the test email arrives.
+Check the container logs for `Baseline established` once per store and confirm the test email arrives.
 Then set `SEND_STARTUP_TEST_EMAIL` to `false` and hit **Update the stack**.
 
 The compose file deliberately has no `env_file:` entry — Portainer supplies these variables itself, and

@@ -29,7 +29,7 @@ public sealed class EmailOptions
     [EmailAddress]
     public string FromAddress { get; set; } = string.Empty;
 
-    public string FromName { get; set; } = "Sleep Token Store Watcher";
+    public string FromName { get; set; } = "Merch Store Watcher";
 
     /// <summary>Where alerts go. Multiple recipients allowed.</summary>
     [Required]

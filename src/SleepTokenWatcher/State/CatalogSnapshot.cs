@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace SleepTokenWatcher.State;
 
 /// <summary>
@@ -7,32 +9,41 @@ public sealed class CatalogSnapshot
 {
     public DateTimeOffset CapturedAtUtc { get; set; }
 
-    /// <summary>Keyed by Shopify product id.</summary>
-    public Dictionary<long, ProductSnapshot> Products { get; set; } = [];
+    /// <summary>Keyed by the platform's product id.</summary>
+    public Dictionary<string, ProductSnapshot> Products { get; set; } = [];
 }
 
 public sealed class ProductSnapshot
 {
-    public long Id { get; set; }
+    /// <summary>Shopify ids are numeric, Squarespace ids are hex strings; both are stored as text.</summary>
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string Id { get; set; } = string.Empty;
+
     public string Title { get; set; } = string.Empty;
     public string Handle { get; set; } = string.Empty;
     public string? ProductType { get; set; }
     public string? ImageUrl { get; set; }
 
-    /// <summary>Keyed by Shopify variant id.</summary>
-    public Dictionary<long, VariantSnapshot> Variants { get; set; } = [];
+    /// <summary>Site-relative product page path. Null in state written before Squarespace support.</summary>
+    public string? UrlPath { get; set; }
+
+    /// <summary>Keyed by the platform's variant id.</summary>
+    public Dictionary<string, VariantSnapshot> Variants { get; set; } = [];
 
     public bool HasAnyAvailableVariant => Variants.Values.Any(v => v.Available);
 
     /// <summary>Null when no variant carries a price. Min over nullables yields null for an empty sequence.</summary>
     public decimal? LowestPrice => Variants.Values.Select(v => v.Price).Where(p => p.HasValue).Min();
 
-    public string BuildUrl(string storeBaseUrl) => $"{storeBaseUrl.TrimEnd('/')}/products/{Handle}";
+    public string BuildUrl(string storeBaseUrl) =>
+        $"{storeBaseUrl.TrimEnd('/')}/{(UrlPath ?? $"products/{Handle}").TrimStart('/')}";
 }
 
 public sealed class VariantSnapshot
 {
-    public long Id { get; set; }
+    [JsonConverter(typeof(NumberOrStringConverter))]
+    public string Id { get; set; } = string.Empty;
+
     public string Title { get; set; } = string.Empty;
     public string? Sku { get; set; }
     public decimal? Price { get; set; }

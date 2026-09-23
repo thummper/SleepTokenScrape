@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using SleepTokenWatcher.Catalog;
 using SleepTokenWatcher.Configuration;
 using SleepTokenWatcher.State;
 
@@ -14,7 +15,7 @@ namespace SleepTokenWatcher.Shopify;
 public sealed class ShopifyCatalogClient(
     HttpClient httpClient,
     IOptions<WatcherOptions> options,
-    ILogger<ShopifyCatalogClient> logger)
+    ILogger<ShopifyCatalogClient> logger) : ICatalogClient
 {
     private const int PageSize = 250;
     private const int MaxAttempts = 3;
@@ -27,16 +28,18 @@ public sealed class ShopifyCatalogClient(
 
     private readonly WatcherOptions _options = options.Value;
 
+    public StorePlatform Platform => StorePlatform.Shopify;
+
     /// <summary>
-    /// Fetches every published product in the watched collection, following pagination until an empty page.
+    /// Fetches every published product in the store's collection, following pagination until an empty page.
     /// </summary>
-    public async Task<CatalogSnapshot> FetchCatalogAsync(CancellationToken cancellationToken)
+    public async Task<CatalogSnapshot> FetchCatalogAsync(StoreOptions store, CancellationToken cancellationToken)
     {
         var snapshot = new CatalogSnapshot { CapturedAtUtc = DateTimeOffset.UtcNow };
 
         for (var page = 1; page <= _options.MaxPages; page++)
         {
-            var path = $"/collections/{_options.CollectionHandle}/products.json?limit={PageSize}&page={page}";
+            var path = $"{store.BaseUrl.TrimEnd('/')}/collections/{store.CollectionHandle}/products.json?limit={PageSize}&page={page}";
             var response = await GetWithRetryAsync(path, cancellationToken);
 
             if (response.Products.Count == 0)
@@ -46,7 +49,8 @@ public sealed class ShopifyCatalogClient(
 
             foreach (var product in response.Products)
             {
-                snapshot.Products[product.Id] = MapProduct(product);
+                var mapped = MapProduct(product);
+                snapshot.Products[mapped.Id] = mapped;
             }
 
             // A short page means there is nothing after it.
@@ -99,18 +103,20 @@ public sealed class ShopifyCatalogClient(
     {
         var snapshot = new ProductSnapshot
         {
-            Id = product.Id,
+            Id = product.Id.ToString(CultureInfo.InvariantCulture),
             Title = product.Title,
             Handle = product.Handle,
+            UrlPath = $"/products/{product.Handle}",
             ProductType = product.ProductType,
             ImageUrl = product.Images.OrderBy(i => i.Position).Select(i => i.Src).FirstOrDefault(),
         };
 
         foreach (var variant in product.Variants)
         {
-            snapshot.Variants[variant.Id] = new VariantSnapshot
+            var variantId = variant.Id.ToString(CultureInfo.InvariantCulture);
+            snapshot.Variants[variantId] = new VariantSnapshot
             {
-                Id = variant.Id,
+                Id = variantId,
                 Title = variant.Title,
                 Sku = variant.Sku,
                 Price = ParsePrice(variant.Price),

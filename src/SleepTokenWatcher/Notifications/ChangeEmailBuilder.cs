@@ -1,17 +1,15 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
-using Microsoft.Extensions.Options;
 using SleepTokenWatcher.Configuration;
 using SleepTokenWatcher.Detection;
 using SleepTokenWatcher.State;
 
 namespace SleepTokenWatcher.Notifications;
 
-/// <summary>Turns a <see cref="StoreChanges"/> into a subject line and an HTML/plain-text body pair.</summary>
-public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
+/// <summary>Turns one store's <see cref="StoreChanges"/> into a subject line and an HTML/plain-text body pair.</summary>
+public sealed class ChangeEmailBuilder(StoreOptions store, string displayTimeZone)
 {
-    private readonly WatcherOptions _options = options.Value;
 
     public string BuildSubject(StoreChanges changes)
     {
@@ -32,7 +30,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
             parts.Add($"{changes.PriceChanges.Count} price {Plural(changes.PriceChanges.Count, "change")}");
         }
 
-        return $"Sleep Token Store: {string.Join(", ", parts)}";
+        return $"{store.Name}: {string.Join(", ", parts)}";
     }
 
     public string BuildHtmlBody(StoreChanges changes)
@@ -47,7 +45,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
 
         html.Append(
             $"""
-             <h1 style="font-size:20px;margin:0 0 4px;">Sleep Token UK Store</h1>
+             <h1 style="font-size:20px;margin:0 0 4px;">{WebUtility.HtmlEncode(store.Name)}</h1>
              <p style="margin:0 0 24px;color:#666;font-size:13px;">Checked {WebUtility.HtmlEncode(FormatNow())}</p>
              """);
 
@@ -98,7 +96,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
     public string BuildTextBody(StoreChanges changes)
     {
         var text = new StringBuilder();
-        text.AppendLine("Sleep Token UK Store");
+        text.AppendLine(store.Name);
         text.AppendLine($"Checked {FormatNow()}");
         text.AppendLine();
 
@@ -109,7 +107,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
             foreach (var product in changes.NewProducts)
             {
                 text.AppendLine($"- {product.Title}{FormatPriceSuffix(product)}");
-                text.AppendLine($"  {product.BuildUrl(_options.StoreBaseUrl)}");
+                text.AppendLine($"  {product.BuildUrl(store.BaseUrl)}");
             }
 
             text.AppendLine();
@@ -124,7 +122,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
                 var options = restock.Variants.Where(v => !v.IsDefaultTitle).Select(v => v.Title).ToList();
                 var suffix = options.Count > 0 ? $" ({string.Join(", ", options)})" : string.Empty;
                 text.AppendLine($"- {restock.Product.Title}{suffix}");
-                text.AppendLine($"  {restock.Product.BuildUrl(_options.StoreBaseUrl)}");
+                text.AppendLine($"  {restock.Product.BuildUrl(store.BaseUrl)}");
             }
 
             text.AppendLine();
@@ -139,7 +137,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
                 var option = change.IsDefaultTitle ? string.Empty : $" [{change.VariantTitle}]";
                 text.AppendLine(
                     $"- {change.Product.Title}{option}: {Money(change.OldPrice)} -> {Money(change.NewPrice)}");
-                text.AppendLine($"  {change.Product.BuildUrl(_options.StoreBaseUrl)}");
+                text.AppendLine($"  {change.Product.BuildUrl(store.BaseUrl)}");
             }
 
             text.AppendLine();
@@ -149,8 +147,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
         return text.ToString();
     }
 
-    private string CollectionUrl =>
-        $"{_options.StoreBaseUrl.TrimEnd('/')}/collections/{_options.CollectionHandle}";
+    private string CollectionUrl => store.CollectionUrl;
 
     private static void AppendSectionHeading(StringBuilder html, string title, string colour) =>
         html.Append(
@@ -161,7 +158,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
 
     private void AppendProductCard(StringBuilder html, ProductSnapshot product, string detailHtml)
     {
-        var url = WebUtility.HtmlEncode(product.BuildUrl(_options.StoreBaseUrl));
+        var url = WebUtility.HtmlEncode(product.BuildUrl(store.BaseUrl));
         var title = WebUtility.HtmlEncode(product.Title);
 
         html.Append(
@@ -241,7 +238,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
         product.LowestPrice is { } price ? $" — {Money(price)}" : string.Empty;
 
     private string Money(decimal amount) =>
-        $"{_options.CurrencySymbol}{amount.ToString("0.00", CultureInfo.InvariantCulture)}";
+        $"{store.CurrencySymbol}{amount.ToString("0.00", CultureInfo.InvariantCulture)}";
 
     private string FormatNow()
     {
@@ -249,7 +246,7 @@ public sealed class ChangeEmailBuilder(IOptions<WatcherOptions> options)
 
         try
         {
-            var zone = TimeZoneInfo.FindSystemTimeZoneById(_options.DisplayTimeZone);
+            var zone = TimeZoneInfo.FindSystemTimeZoneById(displayTimeZone);
             return TimeZoneInfo.ConvertTime(now, zone).ToString("dddd d MMMM, HH:mm", CultureInfo.InvariantCulture);
         }
         catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)

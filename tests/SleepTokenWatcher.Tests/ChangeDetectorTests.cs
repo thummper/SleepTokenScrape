@@ -153,7 +153,7 @@ public class ChangeDetectorTests
 
         return new ProductSnapshot
         {
-            Id = id,
+            Id = id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             Title = title,
             Handle = title.ToLowerInvariant().Replace(' ', '-'),
             Variants = variants.ToDictionary(v => v.Id),
@@ -163,7 +163,7 @@ public class ChangeDetectorTests
     private static VariantSnapshot Variant(long id, string title, decimal? price, bool available) =>
         new()
         {
-            Id = id,
+            Id = id.ToString(System.Globalization.CultureInfo.InvariantCulture),
             Title = title,
             Price = price,
             Available = available,
